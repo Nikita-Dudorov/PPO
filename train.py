@@ -91,6 +91,8 @@ def eval(agent, env, n_eval_episodes):
 if __name__ == "__main__":
     args = Args()
     ppo_eps = args.ppo_eps
+    c_val_loss = args.c_val_loss
+    c_entr_loss = args.c_entr_loss
     n_env_steps = int(args.n_env_steps)
     rollout_len = args.rollout_len
     batch_size = args.batch_size
@@ -106,7 +108,7 @@ if __name__ == "__main__":
 
     # setup env
     env = gym.make(args.gym_id)
-    eval_env = gym.make(args.gym_id)
+    eval_env = gym.make(args.gym_id, render_mode="rgb_array")
     eval_env = gym.wrappers.RecordVideo(eval_env, video_folder='videos', episode_trigger=lambda k: k % args.n_eval_episodes == 0)
 
     # set seed for reproducibility
@@ -144,19 +146,21 @@ if __name__ == "__main__":
                 ppo_loss = -torch.min(b_prob_ratio * b_adv, b_prob_ratio.clip(1-ppo_eps, 1+ppo_eps) * b_adv).sum()  # TODO use mean()? 
                 value_loss = ((b_pred_val - b_rwd_to_go)**2).sum()  # TODO use mean?
                 entropy_loss = -b_pred_act_entropy.sum()  # TODO use mean?
-                loss = ppo_loss + value_loss + entropy_loss  # TODO add loss coefficients
+
+                loss = ppo_loss + c_val_loss * value_loss + c_entr_loss * entropy_loss
                 optimizer.zero_grad()
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(agent.parameters(), args.grad_clip)
                 optimizer.step()
         
         env_steps_trained = (iter+1)*rollout_len
         if iter % args.log_every == 0:
-            print(f"| iter: {iter+1} | env steps trained: {env_steps_trained} |  loss: {loss.item()} |")
+            print(f"| iter: {iter} | env steps trained: {env_steps_trained} |  loss: {loss.item()} |")
             wandb.log({'loss': loss.item()}, step = env_steps_trained)
         if iter % args.eval_every == 0:
             scores = eval(agent, eval_env, args.n_eval_episodes)
             score_mean = scores.mean().item()
             score_std = scores.std().item()
-            print(f"| iter: {iter+1} | env steps trained: {env_steps_trained} | episodic return mean: {score_mean} | episodic return std: {score_std} |")
+            print(f"| iter: {iter} | env steps trained: {env_steps_trained} | episodic return mean: {score_mean} | episodic return std: {score_std} |")
             wandb.log({'return_mean': score_mean, 'return_std': score_std}, step = env_steps_trained)
 
