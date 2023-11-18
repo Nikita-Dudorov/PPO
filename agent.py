@@ -2,12 +2,10 @@ from torch.distributions.categorical import Categorical
 from torch import nn
 
 class ActorCritic(nn.Module):
-    """Implements PPO pipeline for raw observation and discrete action space"""
+    """Implements actor-critic agent for raw observation and discrete action space"""
 
     def __init__(self, n_hidden, obs_dim, act_dim):
-        obs_dim = obs_dim
-        act_dim = act_dim
-        n_hidden = n_hidden
+        super().__init__()
 
         self.critic = nn.Sequential(
             nn.Linear(obs_dim, n_hidden, bias=True),
@@ -34,4 +32,5 @@ class ActorCritic(nn.Module):
         logits = self.actor(obs)
         dist = Categorical(logits=logits)
         act = dist.sample()
-        return act, dist.probs(act), dist.entropy()
+        # return action, action probability, entropy of action distribution
+        return act, dist.log_prob(act).exp(), dist.entropy()

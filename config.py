@@ -13,11 +13,11 @@ class Args:
         self.adam_eps = 1e-5
 
         # log
-        self.log_every = 1
+        self.log_every = 10
 
         # eval
-        self.eval_every = 10
-        self.n_eval_episodes = 100
+        self.eval_every = 100
+        self.n_eval_episodes = 10
 
         # agent
         self.n_hidden = 64
