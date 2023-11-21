@@ -7,7 +7,7 @@ class ActorCritic(nn.Module):
     def __init__(self, n_hidden, obs_dim, act_dim):
         super().__init__()
 
-        self.critic = nn.Sequential(
+        self._critic = nn.Sequential(
             nn.Linear(obs_dim, n_hidden, bias=True),
             nn.Tanh(),
             nn.Linear(n_hidden, n_hidden, bias=True),
@@ -15,7 +15,7 @@ class ActorCritic(nn.Module):
             nn.Linear(n_hidden, 1, bias=True)
         )
         
-        self.actor = nn.Sequential(
+        self._actor = nn.Sequential(
             nn.Linear(obs_dim, n_hidden, bias=True),
             nn.Tanh(),
             nn.Linear(n_hidden, n_hidden, bias=True),
@@ -23,13 +23,19 @@ class ActorCritic(nn.Module):
             nn.Linear(n_hidden, act_dim, bias=True)
         )
 
-        # TODO add custom layer init 
+        # TODO which layer init to use?
+        def init_weights(layer, std=1.0, bias=0.0):
+            if type(layer) == nn.Linear:
+                nn.init.orthogonal_(layer.weight, std)
+                nn.init.constant_(layer.bias, bias)
+        
+        self.apply(init_weights)
 
     def get_value(self, obs):
-        return self.critic(obs)
+        return self._critic(obs)
 
     def get_action(self, obs):
-        logits = self.actor(obs)
+        logits = self._actor(obs)
         dist = Categorical(logits=logits)
         act = dist.sample()
         # return action, action probability, entropy of action distribution
