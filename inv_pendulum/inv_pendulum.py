@@ -5,7 +5,7 @@ from gym.envs.mujoco import MujocoEnv
 from gym.spaces import Box
 
 class InvertedPendulumEnv(MujocoEnv, utils.EzPickle):
-    MAX_EP_LEN = 1000
+    MAX_EP_LEN = 250
     metadata = {
         "render_modes": [
             "human",
@@ -28,11 +28,11 @@ class InvertedPendulumEnv(MujocoEnv, utils.EzPickle):
             **kwargs
         )
         self.last_ob = None
-        self._timestep = 0 
 
     def step(self, a):
         self._timestep += 1
-        reward = 1.0  # change it to angle diff with vertical pos
+        angle, target_angle = self.state_vector()[1], 0.0
+        reward = -(angle - target_angle)**2
         self.do_simulation(a, self.frame_skip)
 
         ob = self._get_obs()
@@ -58,4 +58,4 @@ class InvertedPendulumEnv(MujocoEnv, utils.EzPickle):
         assert self.viewer is not None
         v = self.viewer
         v.cam.trackbodyid = 0
-        v.cam.distance = self.model.stat.extent
+        v.cam.distance = 2 * self.model.stat.extent
