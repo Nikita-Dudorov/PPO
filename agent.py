@@ -25,7 +25,7 @@ class ContActorCritic(nn.Module):
             nn.Linear(n_hidden, act_dim, bias=True)
         )
 
-        self._actor_std = nn.Parameter(torch.zeros(act_dim))
+        self._actor_std = nn.Parameter(torch.zeros(1, act_dim))
 
         # TODO which layer init to use?
         def init_weights(layer, std=1.0, bias=0.0):
@@ -45,7 +45,7 @@ class ContActorCritic(nn.Module):
         dist = Normal(act_mean, act_std)
         act = dist.sample()
         # return action, action probability, entropy of action distribution
-        return act, dist.log_prob(act).exp().sum(1), dist.entropy().sum(1)  # need to add summation over action dim 
+        return act, dist.log_prob(act).sum(1).exp(), dist.entropy().sum(1)  # suppose independetnt components -> summation over action dim 
 
 class ActorCritic(nn.Module):
     """Implements actor-critic agent for raw observation and discrete action space"""
