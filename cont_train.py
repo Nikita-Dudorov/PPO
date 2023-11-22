@@ -112,22 +112,32 @@ if __name__ == "__main__":
     batch_size = args.batch_size
     device = args.device
 
+    # setup wandb logging
     wandb.init(
         project = 'PPO',
-        name = args.gym_id + str(random.randint(1e3,1e4)),
+        name = args.gym_id + '-' + str(random.randint(1e3,1e4)),
         config = args,
         monitor_gym=True,
         mode = 'offline',
     )
+    # define our custom x axis metric
+    wandb.define_metric("env_steps_trained")
+    # define which metrics will be plotted against it
+    wandb.define_metric("train/loss", step_metric="env_steps_trained")
+    wandb.define_metric("train/return_mean", step_metric="env_steps_trained")
+    wandb.define_metric("eval/return_mean", step_metric="env_steps_trained")
+    wandb.define_metric("eval/return_std", step_metric="env_steps_trained")
 
     # setup env
     env = InvertedPendulumEnv()
     env = gym.wrappers.NormalizeObservation(env)
-    env = gym.wrappers.NormalizeReward(env)
+    # env = gym.wrappers.TransformObservation(env, lambda obs: torch.clip(obs,-10,10))
     # env = gym.wrappers.ClipAction(env)
+    env = gym.wrappers.NormalizeReward(env)
     env = gym.wrappers.RecordEpisodeStatistics(env, deque_size=args.n_eval_episodes)
     eval_env = InvertedPendulumEnv(render_mode="rgb_array")
     eval_env = gym.wrappers.NormalizeObservation(eval_env)
+    # eval_env = gym.wrappers.TransformObservation(eval_env, lambda obs: torch.clip(obs,-10,10))
     # eval_env = gym.wrappers.ClipAction(eval_env)
     eval_env = gym.wrappers.RecordVideo(eval_env, video_folder='videos', episode_trigger=lambda k: k % args.n_eval_episodes == 0)
 
@@ -136,6 +146,7 @@ if __name__ == "__main__":
     # eval_env.seed(args.seed)
     torch.manual_seed(args.seed)
 
+    # define agent and optimizer
     agent = ContActorCritic(
         n_hidden=args.n_hidden, 
         obs_dim=env.observation_space.shape[0],
@@ -143,6 +154,7 @@ if __name__ == "__main__":
     ).to(device)
     optimizer = torch.optim.Adam(agent.parameters(), lr=args.lr)
 
+    # training loop
     n_iters = int(n_env_steps / rollout_len)
     init_obs, info = env.reset()
     for iter in range(n_iters):
@@ -171,7 +183,7 @@ if __name__ == "__main__":
                 b_prob_ratio = b_pred_act_prob / b_act_prob
 
                 ppo_loss = -(b_pred_act_prob * b_adv).sum()
-                # ppo_loss = -torch.min(b_prob_ratio * b_adv, b_prob_ratio.clamp(1-ppo_eps, 1+ppo_eps) * b_adv).sum()  # TODO use mean? 
+                # ppo_loss = -torch.min(b_prob_ratio * b_adv, b_prob_ratio.clip(1-ppo_eps, 1+ppo_eps) * b_adv).sum()  # TODO use mean? 
                 value_loss = ((b_pred_val - b_rwd_to_go)**2).sum()  # TODO use mean?
                 # TODO clip value loss?
                 entropy_loss = -b_pred_act_entropy.sum()  # TODO use mean?
@@ -182,22 +194,24 @@ if __name__ == "__main__":
                 torch.nn.utils.clip_grad_norm_(agent.parameters(), args.grad_clip)
                 optimizer.step()
 
-            # print(f"| epoch: {epoch} | loss: {loss.item()} |")
-
         env_steps_trained = (iter+1)*rollout_len
         if iter % args.log_every == 0:
-            print(f"| iter: {iter} | env steps trained: {env_steps_trained} | loss: {loss.item()} |")
-            print(f"| ppo loss: {ppo_loss.item()} | value loss: {value_loss.item()} | entropy loss: {entropy_loss.item()} |")
+            ep_score_mean = sum(env.return_queue)/(max(len(env.return_queue), 1))
+            ep_len_mean = sum(env.length_queue)/(max(len(env.length_queue), 1))
+            print(f"| iter: {iter} | env steps trained: {env_steps_trained} |")
+            print(f"| loss: {loss.item()} | ppo loss: {ppo_loss.item()} | value loss: {value_loss.item()} | entropy loss: {entropy_loss.item()} |")
+            print(f"| train/return_mean: {ep_score_mean} | train/ep_len_mean: {ep_len_mean} |")
             print(f"| lr: {optimizer.param_groups[0]['lr']} | ppo_eps: {ppo_eps}")
-            print(f"| episode length mean: {sum(env.length_queue)/(max(len(env.length_queue), 1))} |")
-            # print(f"| probabilities mean: {b_pred_act_prob.detach().mean().item()} |")
-            wandb.log({'loss': loss.item()}, step = env_steps_trained)
+            print()
+            wandb.log({'train/loss': loss.item(), 'train/return_mean': ep_score_mean, 'env_steps_trained': env_steps_trained})
         if iter % args.eval_every == 0:
-            scores = eval(agent, eval_env, args.n_eval_episodes, device)
-            score_mean = scores.mean().item()
-            score_std = scores.std().item()
-            print(f"| iter: {iter} | env steps trained: {env_steps_trained} | episodic return mean: {score_mean} | episodic return std: {score_std} |")
-            wandb.log({'return_mean': score_mean, 'return_std': score_std}, step = env_steps_trained)
+            ep_scores = eval(agent, eval_env, args.n_eval_episodes, device)
+            ep_score_mean = ep_scores.mean().item()
+            ep_score_std = ep_scores.std().item()
+            print(f"| iter: {iter} | env steps trained: {env_steps_trained} |")
+            print(f"| eval/return_mean: {ep_score_mean} | eval/return_std: {ep_score_std} |")
+            print()
+            wandb.log({'eval/return_mean': ep_score_mean, 'eval/return_std': ep_score_std, 'env_steps_trained': env_steps_trained})
         if args.lr_decay:
             optimizer.param_groups[0]['lr'] = args.lr * (1 - iter / n_iters)
         if args.ppo_eps_decay:
