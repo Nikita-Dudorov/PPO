@@ -1,6 +1,7 @@
 import random
 import torch
 import wandb
+import numpy as np
 import gymnasium as gym
 
 from inv_pendulum.inv_pendulum import InvertedPendulumEnv
@@ -22,7 +23,7 @@ def get_rollout(agent, env, init_obs, rollout_len, gamma, device):
     # collect policy rollout
     with torch.no_grad():
 
-        init_obs = torch.from_numpy(init_obs).to(device).float()
+        init_obs = torch.from_numpy(init_obs).float().to(device)
         act, act_prob, act_entropy = agent.get_action(init_obs.view(1,-1))
         val = agent.get_value(init_obs)
         observations[0] = init_obs
@@ -39,7 +40,7 @@ def get_rollout(agent, env, init_obs, rollout_len, gamma, device):
                 time_intervals.append((start, finish))
                 start = t
                 obs, info = env.reset()
-            obs = torch.from_numpy(obs).to(device).float()
+            obs = torch.from_numpy(obs).float().to(device)
             act, act_prob, act_entropy = agent.get_action(obs.view(1,-1))
             val = agent.get_value(obs)
             observations[t] = obs
@@ -48,7 +49,7 @@ def get_rollout(agent, env, init_obs, rollout_len, gamma, device):
 
         t = rollout_len - 1
         last_obs, rwd, done, truncated, info = env.step(act.view(-1))
-        last_val = agent.get_value(torch.from_numpy(last_obs).to(device).float())
+        last_val = agent.get_value(torch.from_numpy(last_obs).float().to(device))
         terminated = done or truncated
         rewards[t] = rwd
         dones[t] = terminated
@@ -94,7 +95,7 @@ def eval(agent, env, n_eval_episodes, device):
             terminated = False
             ep_ret = 0
             while not terminated:
-                act, *_ = agent.get_action(torch.from_numpy(obs).to(device).float().view(1,-1))
+                act, *_ = agent.get_action(torch.from_numpy(obs).float().to(device).view(1,-1))
                 obs, rwd, done, truncated, info = env.step(act.view(-1))
                 terminated = done or truncated
                 ep_ret += rwd
@@ -129,22 +130,23 @@ if __name__ == "__main__":
     wandb.define_metric("eval/return_std", step_metric="env_steps_trained")
 
     # setup env
-    env = InvertedPendulumEnv()
-    env = gym.wrappers.NormalizeObservation(env)
-    # env = gym.wrappers.TransformObservation(env, lambda obs: torch.clip(obs,-10,10))
-    # env = gym.wrappers.ClipAction(env)
-    env = gym.wrappers.NormalizeReward(env)
+    env = InvertedPendulumEnv(render_mode="rgb_array")
     env = gym.wrappers.RecordEpisodeStatistics(env, deque_size=args.n_eval_episodes)
+    env = gym.wrappers.RecordVideo(env, video_folder='videos', episode_trigger=lambda k: k % args.eval_every == 0)
+    env = gym.wrappers.NormalizeObservation(env)
+    env = gym.wrappers.TransformObservation(env, lambda obs: np.clip(obs,-10,10))
+    env = gym.wrappers.NormalizeReward(env)
+    env = gym.wrappers.TransformReward(env, lambda rwd: np.clip(rwd, -10, 10))
+    # env = gym.wrappers.ClipAction(env)
     eval_env = InvertedPendulumEnv(render_mode="rgb_array")
     eval_env = gym.wrappers.NormalizeObservation(eval_env)
-    # eval_env = gym.wrappers.TransformObservation(eval_env, lambda obs: torch.clip(obs,-10,10))
+    eval_env = gym.wrappers.TransformObservation(eval_env, lambda obs: np.clip(obs,-10,10))
     # eval_env = gym.wrappers.ClipAction(eval_env)
-    eval_env = gym.wrappers.RecordVideo(eval_env, video_folder='videos', episode_trigger=lambda k: k % args.n_eval_episodes == 0)
 
     # set seed for reproducibility
+    torch.manual_seed(args.seed)
     # env.seed(args.seed)
     # eval_env.seed(args.seed)
-    torch.manual_seed(args.seed)
 
     # define agent and optimizer
     agent = ContActorCritic(
