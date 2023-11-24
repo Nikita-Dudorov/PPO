@@ -1,5 +1,4 @@
 import numpy as np
-
 from gym import utils
 from gym.envs.mujoco import MujocoEnv
 from gym.spaces import Box
@@ -31,8 +30,17 @@ class InvertedPendulumEnv(MujocoEnv, utils.EzPickle):
 
     def step(self, a):
         self._timestep += 1
-        angle, target_angle = self.state_vector()[1], 0.0
-        reward = -(angle - target_angle)**2
+        angle = abs(self.state_vector()[1]) % (2*np.pi)
+        assert 0 <= angle <= 2*np.pi 
+        angle_diff = min(angle, (2*np.pi) - angle)
+        assert 0 <= angle_diff <= np.pi
+        penalty = -0.01 * np.cos(angle) * (self.state_vector()[3])**2
+        # penalty = -0.1 * (np.pi - angle_diff) * (self.state_vector()[3])**2
+        # reward = 1.0 * np.cos(angle)
+        # reward = -(angle_diff**2)
+        reward = ((np.pi/2) - angle_diff)**2 if angle_diff <= (np.pi/2) else -0.1
+        reward += penalty
+        a = np.clip(a, self.action_space.low, self.action_space.high)
         self.do_simulation(a, self.frame_skip)
 
         ob = self._get_obs()
@@ -47,7 +55,7 @@ class InvertedPendulumEnv(MujocoEnv, utils.EzPickle):
         self._timestep = 0
         qpos = self.init_qpos
         qvel = self.init_qvel
-        qpos[1] = 3.14 # Set the pole to be facing down
+        qpos[1] = (2*np.pi) * np.random.rand()  # set the pole to be facing down
         self.set_state(qpos, qvel)
         return self._get_obs()
 
