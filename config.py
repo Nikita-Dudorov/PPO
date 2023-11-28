@@ -5,12 +5,13 @@ class ContArgs:
         self.seed = 123
 
         # train
-        self.n_env_steps = 1e6
+        self.n_env_steps = 1e5
         self.rollout_len = 256
         self.batch_size = 64
         self.n_epochs = 10
         self.lr = 1e-3
         self.lr_decay = True
+        self.weight_decay = 0.0
         self.grad_clip = 0.5
 
         # log
