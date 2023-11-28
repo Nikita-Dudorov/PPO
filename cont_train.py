@@ -34,7 +34,7 @@ def get_rollout(agent, env, init_obs, rollout_len, gamma, device):
             obs, rwd, done, truncated, info = env.step(act.view(-1))
             terminated = done or truncated
             rewards[t-1] = rwd
-            dones[t-1] = terminated
+            dones[t-1] = int(terminated)
             if terminated:
                 finish = t-1
                 time_intervals.append((start, finish))
@@ -52,7 +52,7 @@ def get_rollout(agent, env, init_obs, rollout_len, gamma, device):
         last_val = agent.get_value(torch.from_numpy(last_obs).float().to(device))
         terminated = done or truncated
         rewards[t] = rwd
-        dones[t] = terminated
+        dones[t] = int(terminated)
         finish = t
         time_intervals.append((start, finish))
         start = rollout_len
@@ -116,7 +116,7 @@ if __name__ == "__main__":
     # setup wandb logging
     wandb.init(
         project = 'PPO',
-        name = args.gym_id + '-' + str(random.randint(1e3,1e4)),
+        name = args.gym_id + '-' + str(random.randint(int(1e3),int(1e4))),
         config = args,
         monitor_gym=True,
         mode = 'offline',
@@ -132,15 +132,19 @@ if __name__ == "__main__":
     # setup env
     env = InvertedPendulumEnv(render_mode="rgb_array")
     env = gym.wrappers.RecordEpisodeStatistics(env, deque_size=args.n_eval_episodes)
-    env = gym.wrappers.RecordVideo(env, video_folder='videos', episode_trigger=lambda k: k % args.eval_every == 0)
+    # env = gym.wrappers.RecordVideo(env, video_folder='videos', episode_trigger=lambda k: k % args.eval_every == 0)
     env = gym.wrappers.NormalizeObservation(env)
     env = gym.wrappers.TransformObservation(env, lambda obs: np.clip(obs,-10,10))
     env = gym.wrappers.NormalizeReward(env)
     env = gym.wrappers.TransformReward(env, lambda rwd: np.clip(rwd, -10, 10))
     # env = gym.wrappers.ClipAction(env)
     eval_env = InvertedPendulumEnv(render_mode="rgb_array")
+    # eval_env = gym.wrappers.RecordEpisodeStatistics(eval_env, deque_size=args.n_eval_episodes)
+    eval_env = gym.wrappers.RecordVideo(eval_env, video_folder='videos', episode_trigger=lambda k: k % args.n_eval_episodes == 0)
     eval_env = gym.wrappers.NormalizeObservation(eval_env)
     eval_env = gym.wrappers.TransformObservation(eval_env, lambda obs: np.clip(obs,-10,10))
+    eval_env = gym.wrappers.NormalizeReward(eval_env)
+    eval_env = gym.wrappers.TransformReward(eval_env, lambda rwd: np.clip(rwd, -10, 10))
     # eval_env = gym.wrappers.ClipAction(eval_env)
 
     # set seed for reproducibility
@@ -154,12 +158,12 @@ if __name__ == "__main__":
         obs_dim=env.observation_space.shape[0],
         act_dim=env.action_space.shape[0], 
     ).to(device)
-    optimizer = torch.optim.Adam(agent.parameters(), lr=args.lr)
+    optimizer = torch.optim.Adam(agent.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
     # training loop
     n_iters = int(n_env_steps / rollout_len)
     init_obs, info = env.reset()
-    for iter in range(n_iters):
+    for iter in range(1, n_iters+1):
 
         *rollout, init_obs = get_rollout(agent, env, init_obs, rollout_len, args.gamma, device)
         observations, action_probs, rewards_to_go, values, advantages = rollout

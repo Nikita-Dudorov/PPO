@@ -4,7 +4,9 @@ from gym.envs.mujoco import MujocoEnv
 from gym.spaces import Box
 
 class InvertedPendulumEnv(MujocoEnv, utils.EzPickle):
-    MAX_EP_LEN = 250
+    MAX_EP_LEN = 500
+    LIMIT_ANGLE = 0.2095
+    LIMIT_X = 2.4
     metadata = {
         "render_modes": [
             "human",
@@ -30,32 +32,33 @@ class InvertedPendulumEnv(MujocoEnv, utils.EzPickle):
 
     def step(self, a):
         self._timestep += 1
-        angle = abs(self.state_vector()[1]) % (2*np.pi)
+        qpos = self.data.qpos
+        qvel = self.data.qvel
+        angle = abs(qpos[1]) % (2*np.pi)
         assert 0 <= angle <= 2*np.pi 
         angle_diff = min(angle, (2*np.pi) - angle)
         assert 0 <= angle_diff <= np.pi
-        penalty = -0.01 * np.cos(angle) * (self.state_vector()[3])**2
-        # penalty = -0.1 * (np.pi - angle_diff) * (self.state_vector()[3])**2
-        # reward = 1.0 * np.cos(angle)
-        # reward = -(angle_diff**2)
-        reward = ((np.pi/2) - angle_diff)**2 if angle_diff <= (np.pi/2) else -0.1
-        reward += penalty
+        # penalty = -0.01 * qvel[1]**2
+        reward = 1 if angle_diff <= self.LIMIT_ANGLE else 0
+        # reward += penalty
         a = np.clip(a, self.action_space.low, self.action_space.high)
         self.do_simulation(a, self.frame_skip)
 
         ob = self._get_obs()
-        terminated = bool(not np.isfinite(ob).all())
+        done = bool(not np.isfinite(ob).all()) or angle_diff > self.LIMIT_ANGLE or abs(qpos[0]) > self.LIMIT_X
         truncated = self._timestep >= self.MAX_EP_LEN
 
         if self.render_mode == "human":
             self.render()
-        return ob, reward, terminated, truncated, {}
+        return ob, reward, done, truncated, {}
 
     def reset_model(self):
         self._timestep = 0
         qpos = self.init_qpos
         qvel = self.init_qvel
-        qpos[1] = (2*np.pi) * np.random.rand()  # set the pole to be facing down
+        qpos = np.random.uniform(-0.05, 0.05, qpos.shape)
+        qvel = np.random.uniform(-0.05, 0.05, qvel.shape)
+        # qpos[1] = (self.LIMIT_ANGLE/2) * np.random.uniform(-1, 1)  # set the pole to be facing down
         self.set_state(qpos, qvel)
         return self._get_obs()
 
