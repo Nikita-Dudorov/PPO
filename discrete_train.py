@@ -118,20 +118,27 @@ if __name__ == "__main__":
         monitor_gym=True,
         mode = 'offline',
     )
+    # define our custom x axis metric
+    wandb.define_metric("env_steps_trained")
+    # define which metrics will be plotted against it
+    wandb.define_metric("train/loss", step_metric="env_steps_trained")
+    wandb.define_metric("train/return_mean", step_metric="env_steps_trained")
+    wandb.define_metric("eval/return_mean", step_metric="env_steps_trained")
+    wandb.define_metric("eval/return_std", step_metric="env_steps_trained")
 
     # setup env
     env = gym.make(args.gym_id)
+    env = gym.wrappers.RecordEpisodeStatistics(env, deque_size=args.n_eval_episodes)
     env = gym.wrappers.NormalizeObservation(env)
     env = gym.wrappers.NormalizeReward(env)
-    env = gym.wrappers.RecordEpisodeStatistics(env, deque_size=args.n_eval_episodes)
     eval_env = gym.make(args.gym_id, render_mode="rgb_array")
-    eval_env = gym.wrappers.NormalizeObservation(eval_env)
     eval_env = gym.wrappers.RecordVideo(eval_env, video_folder='videos', episode_trigger=lambda k: k % args.n_eval_episodes == 0)
+    eval_env = gym.wrappers.NormalizeObservation(eval_env)
 
     # set seed for reproducibility
+    torch.manual_seed(args.seed)
     # env.seed(args.seed)
     # eval_env.seed(args.seed)
-    torch.manual_seed(args.seed)
 
     agent = ActorCritic(
         n_hidden=args.n_hidden, 
@@ -142,7 +149,7 @@ if __name__ == "__main__":
 
     n_iters = int(n_env_steps / rollout_len)
     init_obs, info = env.reset()
-    for iter in range(n_iters):
+    for iter in range(1, n_iters+1):
 
         *rollout, init_obs = get_rollout(agent, env, init_obs, rollout_len, args.gamma, device)
         observations, action_probs, rewards_to_go, values, advantages = rollout
@@ -181,20 +188,24 @@ if __name__ == "__main__":
 
             # print(f"| epoch: {epoch} | loss: {loss.item()} |")
 
-        env_steps_trained = (iter+1)*rollout_len
+        env_steps_trained = iter * rollout_len
         if iter % args.log_every == 0:
-            print(f"| iter: {iter} | env steps trained: {env_steps_trained} | loss: {loss.item()} |")
-            print(f"| ppo loss: {ppo_loss.item()} | value loss: {value_loss.item()} | entropy loss: {entropy_loss.item()} |")
+            ep_score_mean = sum(env.return_queue)/(max(len(env.return_queue), 1))
+            ep_len_mean = sum(env.length_queue)/(max(len(env.length_queue), 1))
+            print(f"| iter: {iter} | env steps trained: {env_steps_trained} |")
+            print(f"| loss: {loss.item()} | ppo loss: {ppo_loss.item()} | value loss: {value_loss.item()} | entropy loss: {entropy_loss.item()} |")
+            print(f"| train/return_mean: {ep_score_mean} | train/ep_len_mean: {ep_len_mean} |")
             print(f"| lr: {optimizer.param_groups[0]['lr']} | ppo_eps: {ppo_eps}")
-            print(f"| episode length mean: {sum(env.length_queue)/(max(len(env.length_queue), 1))} |")
-            # print(f"| probabilities mean: {b_pred_act_prob.detach().mean().item()} |")
-            wandb.log({'loss': loss.item()}, step = env_steps_trained)
+            print()
+            wandb.log({'train/loss': loss.item(), 'train/return_mean': ep_score_mean, 'env_steps_trained': env_steps_trained})
         if iter % args.eval_every == 0:
-            scores = eval(agent, eval_env, args.n_eval_episodes, device)
-            score_mean = scores.mean().item()
-            score_std = scores.std().item()
-            print(f"| iter: {iter} | env steps trained: {env_steps_trained} | episodic return mean: {score_mean} | episodic return std: {score_std} |")
-            wandb.log({'return_mean': score_mean, 'return_std': score_std}, step = env_steps_trained)
+            ep_scores = eval(agent, eval_env, args.n_eval_episodes, device)
+            ep_score_mean = ep_scores.mean().item()
+            ep_score_std = ep_scores.std().item()
+            print(f"| iter: {iter} | env steps trained: {env_steps_trained} |")
+            print(f"| eval/return_mean: {ep_score_mean} | eval/return_std: {ep_score_std} |")
+            print()
+            wandb.log({'eval/return_mean': ep_score_mean, 'eval/return_std': ep_score_std, 'env_steps_trained': env_steps_trained})
         if args.lr_decay:
             optimizer.param_groups[0]['lr'] = args.lr * (1 - iter / n_iters)
         if args.ppo_eps_decay:

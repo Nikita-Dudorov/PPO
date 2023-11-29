@@ -3,7 +3,7 @@ from torch.distributions.categorical import Categorical
 from torch.distributions.normal import Normal
 from torch import nn
 
-class ContActorCritic(nn.Module):
+class ContinuousActorCritic(nn.Module):
     """Implements actor-critic agent for raw observation and continuous action space"""
 
     def __init__(self, n_hidden, obs_dim, act_dim):
@@ -47,7 +47,7 @@ class ContActorCritic(nn.Module):
         # return action, action probability, entropy of action distribution
         return act, dist.log_prob(act).sum(1).exp(), dist.entropy().sum(1)  # suppose independetnt components -> summation over action dim 
 
-class ActorCritic(nn.Module):
+class DiscreteActorCritic(nn.Module):
     """Implements actor-critic agent for raw observation and discrete action space"""
 
     def __init__(self, n_hidden, obs_dim, act_dim):

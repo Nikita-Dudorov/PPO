@@ -1,4 +1,4 @@
-class ContArgs:
+class ContinuousArgs:
     def __init__(self):
         self.gym_id = 'InvertedPendulum'
         self.device = 'cpu'
@@ -30,7 +30,7 @@ class ContArgs:
         self.c_val_loss = 0.5
         self.c_entr_loss = 0.0
 
-class Args:
+class DiscreteArgs:
     def __init__(self):
         self.gym_id = 'CartPole-v1'
         self.device = 'cpu'

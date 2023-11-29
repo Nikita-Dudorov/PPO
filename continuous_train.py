@@ -5,8 +5,8 @@ import numpy as np
 import gymnasium as gym
 
 from inv_pendulum.inv_pendulum import InvertedPendulumEnv
-from config import ContArgs
-from agent import ContActorCritic
+from config import ContinuousArgs
+from agent import ContinuousActorCritic
 
 def get_rollout(agent, env, init_obs, rollout_len, gamma, device):
     obs_dim = env.observation_space.shape[0]
@@ -104,7 +104,7 @@ def eval(agent, env, n_eval_episodes, device):
             
 
 if __name__ == "__main__":
-    args = ContArgs()
+    args = ContinuousArgs()
     ppo_eps = args.ppo_eps
     c_val_loss = args.c_val_loss
     c_entr_loss = args.c_entr_loss
@@ -153,7 +153,7 @@ if __name__ == "__main__":
     # eval_env.seed(args.seed)
 
     # define agent and optimizer
-    agent = ContActorCritic(
+    agent = ContinuousActorCritic(
         n_hidden=args.n_hidden, 
         obs_dim=env.observation_space.shape[0],
         act_dim=env.action_space.shape[0], 
@@ -200,7 +200,7 @@ if __name__ == "__main__":
                 torch.nn.utils.clip_grad_norm_(agent.parameters(), args.grad_clip)
                 optimizer.step()
 
-        env_steps_trained = (iter+1)*rollout_len
+        env_steps_trained = iter * rollout_len
         if iter % args.log_every == 0:
             ep_score_mean = sum(env.return_queue)/(max(len(env.return_queue), 1))
             ep_len_mean = sum(env.length_queue)/(max(len(env.length_queue), 1))
