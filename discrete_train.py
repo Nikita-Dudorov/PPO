@@ -3,8 +3,8 @@ import torch
 import wandb
 import gymnasium as gym
 
-from config import Args
-from agent import ActorCritic
+from config import DiscreteArgs
+from agent import DiscreteActorCritic
 
 def get_rollout(agent, env, init_obs, rollout_len, gamma, device):
     obs_dim = env.observation_space.shape[0]
@@ -102,7 +102,7 @@ def eval(agent, env, n_eval_episodes, device):
             
 
 if __name__ == "__main__":
-    args = Args()
+    args = DiscreteArgs()
     ppo_eps = args.ppo_eps
     c_val_loss = args.c_val_loss
     c_entr_loss = args.c_entr_loss
@@ -140,7 +140,7 @@ if __name__ == "__main__":
     # env.seed(args.seed)
     # eval_env.seed(args.seed)
 
-    agent = ActorCritic(
+    agent = DiscreteActorCritic(
         n_hidden=args.n_hidden, 
         obs_dim=env.observation_space.shape[0],
         act_dim=env.action_space.n, 
