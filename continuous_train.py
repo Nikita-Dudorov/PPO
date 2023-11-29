@@ -113,7 +113,7 @@ if __name__ == "__main__":
     batch_size = args.batch_size
     device = args.device
 
-    # setup wandb logging
+    # setup wandb
     wandb.init(
         project = 'PPO',
         name = args.gym_id + '-' + str(random.randint(int(1e3),int(1e4))),

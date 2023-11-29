@@ -21,7 +21,7 @@ def get_rollout(agent, env, init_obs, rollout_len, gamma, device):
     # collect policy rollout
     with torch.no_grad():
 
-        init_obs = torch.from_numpy(init_obs).to(device).float()
+        init_obs = torch.from_numpy(init_obs).float().to(device)
         act, act_prob, act_entropy = agent.get_action(init_obs)
         val = agent.get_value(init_obs)
         observations[0] = init_obs
@@ -38,7 +38,7 @@ def get_rollout(agent, env, init_obs, rollout_len, gamma, device):
                 time_intervals.append((start, finish))
                 start = t
                 obs, info = env.reset()
-            obs = torch.from_numpy(obs).to(device).float()
+            obs = torch.from_numpy(obs).float().to(device)
             act, act_prob, act_entropy = agent.get_action(obs)
             val = agent.get_value(obs)
             observations[t] = obs
@@ -47,7 +47,7 @@ def get_rollout(agent, env, init_obs, rollout_len, gamma, device):
 
         t = rollout_len - 1
         last_obs, rwd, done, truncated, info = env.step(act.item())
-        last_val = agent.get_value(torch.from_numpy(last_obs).to(device).float())
+        last_val = agent.get_value(torch.from_numpy(last_obs).float().to(device))
         terminated = done or truncated
         rewards[t] = rwd
         dones[t] = terminated
@@ -93,7 +93,7 @@ def eval(agent, env, n_eval_episodes, device):
             terminated = False
             ep_ret = 0
             while not terminated:
-                act, *_ = agent.get_action(torch.from_numpy(obs).to(device).float())
+                act, *_ = agent.get_action(torch.from_numpy(obs).float().to(device))
                 obs, rwd, done, truncated, info = env.step(act.item())
                 terminated = done or truncated
                 ep_ret += rwd
@@ -111,6 +111,7 @@ if __name__ == "__main__":
     batch_size = args.batch_size
     device = args.device
 
+    # setup wandb
     wandb.init(
         project = 'PPO',
         name = args.gym_id + str(random.randint(1e3,1e4)),
@@ -140,6 +141,7 @@ if __name__ == "__main__":
     # env.seed(args.seed)
     # eval_env.seed(args.seed)
 
+    # define agent and optimizer
     agent = DiscreteActorCritic(
         n_hidden=args.n_hidden, 
         obs_dim=env.observation_space.shape[0],
@@ -147,6 +149,7 @@ if __name__ == "__main__":
     ).to(device)
     optimizer = torch.optim.Adam(agent.parameters(), lr=args.lr)
 
+    # training loop
     n_iters = int(n_env_steps / rollout_len)
     init_obs, info = env.reset()
     for iter in range(1, n_iters+1):
