@@ -32,6 +32,7 @@ class InvertedPendulumEnv(MujocoEnv, utils.EzPickle):
 
     def step(self, a):
         self._timestep += 1
+        
         qpos = self.data.qpos
         qvel = self.data.qvel
         angle = abs(qpos[1]) % (2*np.pi)
@@ -41,6 +42,7 @@ class InvertedPendulumEnv(MujocoEnv, utils.EzPickle):
         # penalty = -0.01 * qvel[1]**2
         reward = 1 if angle_diff <= self.LIMIT_ANGLE else 0
         # reward += penalty
+
         a = np.clip(a, self.action_space.low, self.action_space.high)
         self.do_simulation(a, self.frame_skip)
 
@@ -58,9 +60,9 @@ class InvertedPendulumEnv(MujocoEnv, utils.EzPickle):
         qvel = self.init_qvel
         qpos = np.random.uniform(-0.05, 0.05, qpos.shape)
         qvel = np.random.uniform(-0.05, 0.05, qvel.shape)
-        # qpos[1] = (self.LIMIT_ANGLE/2) * np.random.uniform(-1, 1)  # set the pole to be facing down
+        # qpos[1] = (self.LIMIT_ANGLE/2) * np.random.uniform(-1, 1)  # initial angle
         self.set_state(qpos, qvel)
-        return self._get_obs()
+        return self._get_obs()  # , {}
 
     def _get_obs(self):
         return np.concatenate([self.data.qpos, self.data.qvel]).ravel()
