@@ -114,7 +114,7 @@ if __name__ == "__main__":
     # setup wandb
     wandb.init(
         project = 'PPO',
-        name = args.gym_id + str(random.randint(1e3,1e4)),
+        name = args.gym_id + '-' + str(random.randint(int(1e3),int(1e4))),
         config = args,
         monitor_gym=True,
         mode = 'offline',
@@ -128,11 +128,13 @@ if __name__ == "__main__":
     wandb.define_metric("eval/return_std", step_metric="env_steps_trained")
 
     # setup env
-    env = gym.make(args.gym_id)
+    env = gym.make(args.gym_id, render_mode="rgb_array")
     env = gym.wrappers.RecordEpisodeStatistics(env, deque_size=args.n_eval_episodes)
+    # env = gym.wrappers.RecordVideo(env, video_folder='videos', episode_trigger=lambda k: k % args.eval_every == 0)
     env = gym.wrappers.NormalizeObservation(env)
     env = gym.wrappers.NormalizeReward(env)
     eval_env = gym.make(args.gym_id, render_mode="rgb_array")
+    eval_env = gym.wrappers.RecordEpisodeStatistics(eval_env, deque_size=args.n_eval_episodes)
     eval_env = gym.wrappers.RecordVideo(eval_env, video_folder='videos', episode_trigger=lambda k: k % args.n_eval_episodes == 0)
     eval_env = gym.wrappers.NormalizeObservation(eval_env)
 
